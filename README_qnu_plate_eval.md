@@ -79,13 +79,17 @@ Current `wmse_mean` results over 3 held-out plates / 540 active compounds:
 | `rdkit_tanimoto_knn_k5` | 0.506388 |
 | `all_active_mean_without_plate` | 0.506464 |
 | `dmso_control_mean` | 0.549848 |
+| `bhr_active_mean_without_plate` | 0.567208 |
+| `kdl_active_mean_without_plate` | 0.654191 |
 
-The two mean perturbed baselines are:
+The mean perturbed baselines are:
 
 | baseline | definition | wmse_mean |
 | --- | --- | ---: |
 | `qnu_active_mean_without_plate` | per-gene mean over active `tvc-qnu-012` training compounds only, excluding the held-out plate compounds and excluding DMSO | 0.488814 |
 | `all_active_mean_without_plate` | per-gene mean over active training compounds from `tvc-bhr-009`, `tvc-kdl-010`, and `tvc-qnu-012`, excluding the held-out compounds and excluding DMSO | 0.506464 |
+| `bhr_active_mean_without_plate` | per-gene mean over active `tvc-bhr-009` training compounds only, excluding any held-out compounds and excluding DMSO | 0.567208 |
+| `kdl_active_mean_without_plate` | per-gene mean over active `tvc-kdl-010` training compounds only, excluding any held-out compounds and excluding DMSO | 0.654191 |
 
 ## Outputs
 

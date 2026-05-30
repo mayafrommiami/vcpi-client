@@ -31,6 +31,8 @@ from rdkit.Chem import rdFingerprintGenerator
 ROOT = Path(__file__).resolve().parents[1]
 GENE_COL = "gene_id"
 QNU_JOB_ID = "tvc-qnu-012"
+BHR_JOB_ID = "tvc-bhr-009"
+KDL_JOB_ID = "tvc-kdl-010"
 DEFAULT_NUM_PLATES = 3
 
 DESC_COLS = [
@@ -374,9 +376,10 @@ def score_plate(
     plate_id: int,
     plate_meta: pd.DataFrame,
     all_ids: list[str],
-    qnu_ids: set[str],
+    active_ids_by_job: dict[str, set[str]],
     all_fps: dict[str, DataStructs.ExplicitBitVect],
     expr_all: pd.DataFrame,
+    expr_by_job: dict[str, pd.DataFrame],
     y_all: np.ndarray,
     feature_all: np.ndarray | None,
     gene_filter: list[str],
@@ -392,7 +395,6 @@ def score_plate(
     val_positions = {all_id_index[uid] for uid in val_ids}
     ref_mask = np.array([i not in val_positions for i in range(len(all_ids))], dtype=bool)
     ref_ids = [uid for uid, keep in zip(all_ids, ref_mask, strict=True) if keep]
-    qnu_ref_ids = [uid for uid in ref_ids if uid in qnu_ids]
 
     truth = plate_expression_wide(plate_meta[plate_meta["user_compound_id"].astype(str).isin(val_ids)], gene_filter)
     truth = truth.reindex(index=gene_filter, columns=val_ids)
@@ -401,15 +403,31 @@ def score_plate(
     scores: dict[str, pd.Series] = {}
     reference_counts: dict[str, int] = {}
 
-    train_mean = expr_all[ref_ids].mean(axis=1).to_numpy(dtype=np.float32)
-    pred = pd.DataFrame(np.broadcast_to(train_mean[:, None], truth.shape), index=truth.index, columns=val_ids)
-    scores["all_active_mean_without_plate"] = score_wmse(truth, pred, weights)
-    reference_counts["all_active_mean_without_plate"] = len(ref_ids)
+    def add_mean_baseline(name: str, expr: pd.DataFrame, candidate_ids: set[str]) -> None:
+        ref_subset = [uid for uid in ref_ids if uid in candidate_ids and uid in expr.columns]
+        if not ref_subset:
+            return
+        mean_expr = expr[ref_subset].mean(axis=1).to_numpy(dtype=np.float32)
+        pred = pd.DataFrame(np.broadcast_to(mean_expr[:, None], truth.shape), index=truth.index, columns=val_ids)
+        scores[name] = score_wmse(truth, pred, weights)
+        reference_counts[name] = len(ref_subset)
 
-    qnu_mean = expr_all[qnu_ref_ids].mean(axis=1).to_numpy(dtype=np.float32)
-    pred = pd.DataFrame(np.broadcast_to(qnu_mean[:, None], truth.shape), index=truth.index, columns=val_ids)
-    scores["qnu_active_mean_without_plate"] = score_wmse(truth, pred, weights)
-    reference_counts["qnu_active_mean_without_plate"] = len(qnu_ref_ids)
+    add_mean_baseline("all_active_mean_without_plate", expr_all, set(ref_ids))
+    add_mean_baseline(
+        "qnu_active_mean_without_plate",
+        expr_by_job[QNU_JOB_ID],
+        active_ids_by_job[QNU_JOB_ID],
+    )
+    add_mean_baseline(
+        "bhr_active_mean_without_plate",
+        expr_by_job[BHR_JOB_ID],
+        active_ids_by_job[BHR_JOB_ID],
+    )
+    add_mean_baseline(
+        "kdl_active_mean_without_plate",
+        expr_by_job[KDL_JOB_ID],
+        active_ids_by_job[KDL_JOB_ID],
+    )
 
     if "DMSO" in expr_all.columns:
         dmso = expr_all["DMSO"].to_numpy(dtype=np.float32)
@@ -531,7 +549,19 @@ def main() -> None:
     qnu_active = train_meta[
         (train_meta["job_id"] == QNU_JOB_ID) & active_mask & train_meta["user_compound_id"].isin(all_ids)
     ].copy()
-    qnu_ids = set(qnu_active["user_compound_id"].astype(str).unique())
+    active_ids_by_job = {
+        job_id: set(
+            train_meta.loc[
+                (train_meta["job_id"] == job_id)
+                & active_mask
+                & train_meta["user_compound_id"].isin(all_ids),
+                "user_compound_id",
+            ]
+            .astype(str)
+            .unique()
+        )
+        for job_id in [BHR_JOB_ID, KDL_JOB_ID, QNU_JOB_ID]
+    }
     plates, plate_stats = select_plates(args=args, qnu_active=qnu_active, all_fps=all_fps, query=query)
     plate_stats.to_csv(ROOT / f"{args.output_prefix}_plate_similarity.csv", index=False)
 
@@ -561,6 +591,14 @@ def main() -> None:
 
     print("Aggregating all active-compound expression once...", flush=True)
     expr_all = expression_wide(train_meta, all_ids, gene_filter)
+    expr_by_job = {}
+    for job_id in [BHR_JOB_ID, KDL_JOB_ID, QNU_JOB_ID]:
+        print(f"Aggregating {job_id} active-compound expression...", flush=True)
+        expr_by_job[job_id] = expression_wide(
+            train_meta[train_meta["job_id"] == job_id],
+            sorted(active_ids_by_job[job_id]),
+            gene_filter,
+        )
     y_all = expr_all[all_ids].T.to_numpy(dtype=np.float32)
     feature_all = None
     if args.include_regression:
@@ -576,9 +614,10 @@ def main() -> None:
             plate_id=plate_id,
             plate_meta=plate_meta,
             all_ids=all_ids,
-            qnu_ids=qnu_ids,
+            active_ids_by_job=active_ids_by_job,
             all_fps=all_fps,
             expr_all=expr_all,
+            expr_by_job=expr_by_job,
             y_all=y_all,
             feature_all=feature_all,
             gene_filter=gene_filter,
