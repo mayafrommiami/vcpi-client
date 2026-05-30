@@ -196,7 +196,7 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "submit-ridge", "submit-ensemble"],
         default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
         help="Which eval jobs to submit (default: all)",
     )
