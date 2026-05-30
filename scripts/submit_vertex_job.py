@@ -24,10 +24,12 @@ MACHINE_CONFIGS = {
     "CPU":  dict(machine_type="n1-standard-8"),
 }
 
-# Python 3.11 container — required by vcpi-prediction-contest (needs >=3.11)
+# PyTorch 2.4 / Python 3.10 containers (no py311 variant exists for PyTorch GPU)
+# vcpi-prediction-contest requires >=3.11 in metadata but code runs on 3.10;
+# we force-install with --ignore-requires-python
 CONTAINERS = {
-    "gpu": "us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-4.py311:latest",
-    "cpu": "us-docker.pkg.dev/vertex-ai/training/pytorch-cpu.2-4.py311:latest",
+    "gpu": "us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-4.py310:latest",
+    "cpu": "us-docker.pkg.dev/vertex-ai/training/pytorch-cpu.1-4:latest",
 }
 
 # Extra packages for ChemBERTa model
@@ -59,16 +61,21 @@ def main():
     pip_install = (
         "pip install -q "
         "git+https://github.com/virtualcell-vcpi/vcpi-client.git "
-        "git+https://github.com/virtualcell-vcpi/vcpi-prediction-contest-2026.git "
         "google-cloud-storage polars pyarrow rdkit scipy scikit-learn"
     )
     if extra_pkgs:
         pip_install += f" {extra_pkgs}"
+    # vcpi-prediction-contest metadata says >=3.11 but code runs on 3.10 fine
+    pip_install_contest = (
+        "pip install -q --ignore-requires-python "
+        "git+https://github.com/virtualcell-vcpi/vcpi-prediction-contest-2026.git"
+    )
 
     bootstrap = " && ".join([
         f"git clone --branch {BRANCH} --single-branch {REPO_URL} /vcpi-hack",
         "cd /vcpi-hack",
         pip_install,
+        pip_install_contest,
         f"python {train_script}",
     ])
 
