@@ -70,6 +70,30 @@ EVAL_CONFIGS = {
         "output_prefix": "eval_qnu_improvements",
         "extra_packages": "transformers sentencepiece",
     },
+    "finetuned": {
+        "display_name": "vcpi-eval-finetuned-hyperparam",
+        "script": (
+            "python scripts/qnu_finetuned_hyperparam_sweep.py "
+            "--output-prefix eval_qnu_finetuned_hyperparam"
+        ),
+        "output_prefix": "eval_qnu_finetuned_hyperparam",
+    },
+    "radius3": {
+        "display_name": "vcpi-eval-radius3",
+        "script": (
+            "python scripts/qnu_radius3_sweep.py "
+            "--output-prefix eval_qnu_radius3"
+        ),
+        "output_prefix": "eval_qnu_radius3",
+    },
+    "concat": {
+        "display_name": "vcpi-eval-concat-fp",
+        "script": (
+            "python scripts/qnu_concat_fp_sweep.py "
+            "--output-prefix eval_qnu_concat_fp"
+        ),
+        "output_prefix": "eval_qnu_concat_fp",
+    },
 }
 
 
@@ -149,8 +173,8 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements"],
-        default=["baseline", "extended", "mlp", "improvements"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat"],
+        default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat"],
         help="Which eval jobs to submit (default: all)",
     )
     args = parser.parse_args()
