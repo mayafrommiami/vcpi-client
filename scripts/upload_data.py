@@ -49,13 +49,16 @@ def upload_df(df: pl.DataFrame, bucket, blob_path: str) -> None:
 
 
 def already_uploaded(bucket, job_id: str) -> bool:
-    """Return True if all three parquets for this job_id already exist in GCS."""
-    paths = [
-        f"data/{job_id}/counts.parquet",
-        f"data/{job_id}/metadata.parquet",
-        f"data/{job_id}/chemistry.parquet",
-    ]
-    return all(storage.Blob(p, bucket).exists(bucket.client) for p in paths)
+    """Return True if counts parquet exists AND has more than 1 column (sample data present)."""
+    counts_blob = bucket.blob(f"data/{job_id}/counts.parquet")
+    if not counts_blob.exists(bucket.client):
+        return False
+    # Verify counts parquet has actual sample columns, not just gene_id
+    buf = io.BytesIO()
+    counts_blob.download_to_file(buf)
+    buf.seek(0)
+    df = pl.read_parquet(buf)
+    return len(df.columns) > 1  # more than just gene_id
 
 
 # ── main ──────────────────────────────────────────────────────────────────────
@@ -95,7 +98,8 @@ def main() -> None:
             continue
 
         # 3. Filter counts to matching sample columns
-        keep_ids = set(meta_filt["sequenced_id"].to_list())
+        # counts column names are strings; sequenced_id in metadata is int → cast to str
+        keep_ids = set(str(x) for x in meta_filt["sequenced_id"].to_list())
         gene_col = "gene_id"
         keep_cols = [gene_col] + [c for c in data.columns if c in keep_ids]
         counts_filt = data.select(keep_cols)
