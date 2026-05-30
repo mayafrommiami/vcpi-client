@@ -29,7 +29,8 @@ except ImportError:
 
 # ── constants ─────────────────────────────────────────────────────────────────
 BUCKET       = os.environ.get("GCS_BUCKET", "vcpi-drugseq-2026")
-DATASETS     = ["tvc-bhr-009", "tvc-kdl-010", "tvc-qnu-012"]
+# Comma-separated list of datasets to train on — override via env var
+DATASETS     = os.environ.get("TRAIN_DATASETS", "tvc-qnu-012").split(",")
 FP_RADIUS    = 2
 FP_NBITS     = 2048
 GENE_FILTER  = load_gene_filter()   # 12,995 scored genes
@@ -100,20 +101,37 @@ def load_expression_from_gcs(job_id: str) -> tuple[pd.DataFrame, pd.DataFrame]:
 def build_training_matrix(
     datasets: list[str] = DATASETS,
     gene_filter: list[str] = GENE_FILTER,
+    batch_correct: bool = True,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Load all datasets, merge expression, return:
       - expr_wide: (genes × compounds) DataFrame, restricted to gene_filter
       - chem:      DataFrame with compound → smiles mapping (deduplicated)
+
+    If batch_correct=True (default), apply per-gene additive mean-shift
+    correction using the 4 shared positive controls before merging batches.
+    Reference batch is tvc-qnu-012.  No-ops gracefully if only one dataset.
     """
-    all_expr, all_chem = [], []
+    batch_data: list[tuple[str, pd.DataFrame, pd.DataFrame]] = []
 
     for job_id in datasets:
         expr, chem = load_expression_from_gcs(job_id)
-        all_expr.append(expr)
-        all_chem.append(chem[["compound", "user_compound_id", "smiles"]].drop_duplicates())
+        batch_data.append((job_id, expr, chem))
         print(f"  {job_id}: {expr['compound'].nunique()} compounds, "
               f"{expr['gene_id'].nunique()} genes")
+
+    if batch_correct and len(batch_data) > 1:
+        from models.batch_correct import apply_batch_correction
+        print("\nApplying batch correction (shared controls → tvc-qnu-012 as reference)...")
+        corrected = apply_batch_correction(batch_data)
+        all_expr = [expr for _, expr in corrected]
+    else:
+        all_expr = [expr for _, expr, _ in batch_data]
+
+    all_chem = [
+        chem[["compound", "user_compound_id", "smiles"]].drop_duplicates()
+        for _, _, chem in batch_data
+    ]
 
     expr_all = pd.concat(all_expr, ignore_index=True)
 
@@ -230,3 +248,61 @@ def get_dataloaders(
     val_dl   = DataLoader(val_ds,   batch_size=batch_size, shuffle=False, num_workers=2)
     print(f"Train: {n_train} compounds | Val: {n_val} compounds | Batch: {batch_size}")
     return train_dl, val_dl
+
+
+# ── SMILES dataset (for ChemBERTa) ───────────────────────────────────────────
+@dataclass
+class SmilesExpressionDataset(Dataset):
+    """
+    PyTorch Dataset for encoder-based models (ChemBERTa, etc.).
+    Input:  SMILES string
+    Target: residual expression vector (n_genes,) = expression - per_gene_mean
+    """
+    smiles_list:   list[str]
+    expressions:   np.ndarray   # (N, n_genes)
+    compound_ids:  list[str]
+    gene_ids:      list[str]
+    per_gene_mean: np.ndarray   # (n_genes,)
+
+    def __len__(self) -> int:
+        return len(self.compound_ids)
+
+    def __getitem__(self, idx: int) -> tuple[str, torch.Tensor]:
+        residual = torch.from_numpy(self.expressions[idx] - self.per_gene_mean)
+        return self.smiles_list[idx], residual
+
+
+def build_smiles_dataset(
+    datasets: list[str] = DATASETS,
+    gene_filter: list[str] = GENE_FILTER,
+    batch_correct: bool = True,
+) -> SmilesExpressionDataset:
+    """
+    Like build_dataset() but returns raw SMILES strings instead of Morgan
+    fingerprints — used by encoder-based models (e.g. ChemBERTa).
+    """
+    print("Building SMILES training dataset...")
+    expr_wide, chem = build_training_matrix(datasets, gene_filter, batch_correct)
+
+    expr_compounds = list(expr_wide.columns)
+    chem_indexed   = chem.set_index("compound")
+    chem_aligned   = chem_indexed.reindex(expr_compounds)
+
+    valid_mask   = chem_aligned["smiles"].notna()
+    chem_aligned = chem_aligned[valid_mask]
+    expr_aligned = expr_wide.loc[:, valid_mask.values]
+
+    valid_ids    = chem_aligned.index.tolist()
+    smiles_list  = chem_aligned["smiles"].tolist()
+
+    expr_mat      = expr_aligned.values.T.astype(np.float32)  # (N, n_genes)
+    per_gene_mean = expr_mat.mean(axis=0)                      # (n_genes,)
+
+    print(f"Dataset: {len(valid_ids)} compounds, {expr_mat.shape[1]} genes")
+    return SmilesExpressionDataset(
+        smiles_list   = smiles_list,
+        expressions   = expr_mat,
+        compound_ids  = valid_ids,
+        gene_ids      = list(expr_wide.index),
+        per_gene_mean = per_gene_mean,
+    )
