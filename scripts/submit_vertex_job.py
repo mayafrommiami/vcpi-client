@@ -3,8 +3,10 @@
 Submit a Vertex AI Custom Training Job using the Python SDK.
 
 Usage:
-    python scripts/submit_vertex_job.py          # T4 GPU, 80 epochs
+    python scripts/submit_vertex_job.py                          # Morgan FP MLP, T4 GPU, 80 epochs
+    python scripts/submit_vertex_job.py --model chemberta        # ChemBERTa MLP
     python scripts/submit_vertex_job.py --gpu A100 --epochs 150
+    python scripts/submit_vertex_job.py --datasets tvc-qnu-012,tvc-bhr-009
 """
 
 import argparse
@@ -22,31 +24,52 @@ MACHINE_CONFIGS = {
     "CPU":  dict(machine_type="n1-standard-8"),
 }
 
-# Pre-built Google PyTorch container (PyTorch 2.3, Python 3.10, CUDA 12.4)
-CONTAINER = "us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-3.py310:latest"
+# Python 3.11 container — required by vcpi-prediction-contest (needs >=3.11)
+CONTAINERS = {
+    "gpu": "us-docker.pkg.dev/vertex-ai/training/pytorch-gpu.2-4.py311:latest",
+    "cpu": "us-docker.pkg.dev/vertex-ai/training/pytorch-cpu.2-4.py311:latest",
+}
+
+# Extra packages for ChemBERTa model
+CHEMBERTA_EXTRA = "transformers sentencepiece"
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gpu",    default="T4",  choices=["T4", "A100", "CPU"])
-    parser.add_argument("--epochs", default=80,    type=int)
-    parser.add_argument("--lr",     default=1e-3,  type=float)
+    parser.add_argument("--model",    default="morgan",     choices=["morgan", "chemberta"],
+                        help="Which compound representation to use")
+    parser.add_argument("--gpu",      default="T4",         choices=["T4", "A100", "CPU"])
+    parser.add_argument("--epochs",   default=80,           type=int)
+    parser.add_argument("--lr",       default=1e-3,         type=float)
+    parser.add_argument("--datasets", default="tvc-qnu-012",
+                        help="Comma-separated dataset IDs to train on")
     args = parser.parse_args()
 
     from google.cloud import aiplatform
     aiplatform.init(project=PROJECT, location=REGION, staging_bucket=f"gs://{BUCKET}")
 
-    output_dir = f"gs://{BUCKET}/runs/vertex-{args.gpu.lower()}"
+    run_tag    = f"{args.model}-{args.gpu.lower()}"
+    output_dir = f"gs://{BUCKET}/runs/{run_tag}"
+    train_script = "models/train_chemberta.py" if args.model == "chemberta" else "models/train.py"
 
-    # Bootstrap command: clone repo → install deps → train
+    extra_pkgs = CHEMBERTA_EXTRA if args.model == "chemberta" else ""
+    container  = CONTAINERS["cpu"] if args.gpu == "CPU" else CONTAINERS["gpu"]
+
+    # Bootstrap: clone repo → install deps → run training script
+    pip_install = (
+        "pip install -q "
+        "git+https://github.com/virtualcell-vcpi/vcpi-client.git "
+        "git+https://github.com/virtualcell-vcpi/vcpi-prediction-contest-2026.git "
+        "google-cloud-storage polars pyarrow rdkit scipy scikit-learn"
+    )
+    if extra_pkgs:
+        pip_install += f" {extra_pkgs}"
+
     bootstrap = " && ".join([
         f"git clone --branch {BRANCH} --single-branch {REPO_URL} /vcpi-hack",
         "cd /vcpi-hack",
-        "pip install -q "
-        "  git+https://github.com/virtualcell-vcpi/vcpi-client.git "
-        "  git+https://github.com/virtualcell-vcpi/vcpi-prediction-contest-2026.git "
-        "  google-cloud-storage polars pyarrow rdkit scipy scikit-learn",
-        "python models/train.py",
+        pip_install,
+        f"python {train_script}",
     ])
 
     machine_cfg = MACHINE_CONFIGS[args.gpu]
@@ -60,27 +83,31 @@ def main():
         },
         "replica_count": 1,
         "container_spec": {
-            "image_uri": CONTAINER,
+            "image_uri": container,
             "command":   ["bash", "-c"],
             "args":      [bootstrap],
             "env": [
-                {"name": "GCS_BUCKET",     "value": BUCKET},
-                {"name": "AIP_MODEL_DIR",  "value": output_dir},
-                {"name": "EPOCHS",         "value": str(args.epochs)},
-                {"name": "LR",             "value": str(args.lr)},
+                {"name": "GCS_BUCKET",      "value": BUCKET},
+                {"name": "AIP_MODEL_DIR",   "value": output_dir},
+                {"name": "EPOCHS",          "value": str(args.epochs)},
+                {"name": "LR",              "value": str(args.lr)},
+                {"name": "TRAIN_DATASETS",  "value": args.datasets},
             ],
         },
     }
 
     job = aiplatform.CustomJob(
-        display_name=f"vcpi-mlp-{args.gpu.lower()}-e{args.epochs}",
+        display_name=f"vcpi-{run_tag}-e{args.epochs}",
         worker_pool_specs=[worker_spec],
     )
 
     print(f"Submitting Vertex AI job...")
+    print(f"  Model:    {args.model}")
     print(f"  GPU:      {args.gpu}")
+    print(f"  Datasets: {args.datasets}")
     print(f"  Epochs:   {args.epochs}  LR: {args.lr}")
     print(f"  Output:   {output_dir}")
+    print(f"  Container:{container}")
 
     job.submit()
 
