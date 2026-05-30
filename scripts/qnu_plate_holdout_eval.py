@@ -34,6 +34,8 @@ QNU_JOB_ID = "tvc-qnu-012"
 BHR_JOB_ID = "tvc-bhr-009"
 KDL_JOB_ID = "tvc-kdl-010"
 DEFAULT_NUM_PLATES = 3
+TARGET_CONCENTRATION_NM = 10000.0
+TARGET_CONCENTRATION_UNIT = "nM"
 
 DESC_COLS = [
     "molecular_weight",
@@ -45,6 +47,15 @@ DESC_COLS = [
     "num_atoms",
     "num_bonds",
 ]
+
+
+def target_active_mask(metadata: pd.DataFrame) -> pd.Series:
+    """Rows for active compounds at the 10 uM contest dose."""
+    return (
+        ~metadata["is_control"].astype(bool)
+        & metadata["compound_concentration"].astype(float).eq(TARGET_CONCENTRATION_NM)
+        & metadata["compound_concentration_unit"].astype(str).eq(TARGET_CONCENTRATION_UNIT)
+    )
 
 
 def canonical_smiles(smiles: str | float | None) -> str | None:
@@ -542,7 +553,7 @@ def main() -> None:
     train_meta = train_meta.copy()
     train_meta["user_compound_id"] = train_meta["user_compound_id"].astype(str)
 
-    active_mask = ~train_meta["is_control"].astype(bool)
+    active_mask = target_active_mask(train_meta)
     active_ids = set(train_meta.loc[active_mask, "user_compound_id"])
     all_ids, all_fps = build_chemistry_maps(train_chem, active_ids, weight_cols)
 
