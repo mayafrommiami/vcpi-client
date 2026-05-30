@@ -19,9 +19,9 @@ REPO_URL = "https://github.com/mayafrommiami/vcpi-client.git"
 BRANCH   = "hackathon"
 
 MACHINE_CONFIGS = {
-    "T4":   dict(machine_type="n1-standard-8",  accelerator_type="NVIDIA_TESLA_T4",   accelerator_count=1),
+    "T4":   dict(machine_type="n1-highmem-8",   accelerator_type="NVIDIA_TESLA_T4",   accelerator_count=1),
     "A100": dict(machine_type="a2-highgpu-1g",  accelerator_type="NVIDIA_TESLA_A100", accelerator_count=1),
-    "CPU":  dict(machine_type="n1-standard-8"),
+    "CPU":  dict(machine_type="n1-highmem-8"),
 }
 
 # PyTorch 2.4 / Python 3.10 containers (no py311 variant exists for PyTorch GPU)
