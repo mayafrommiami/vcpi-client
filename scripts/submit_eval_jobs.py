@@ -10,10 +10,11 @@ Each job:
   5. Uploads results CSVs to GCS
 
 Usage:
-    python scripts/submit_eval_jobs.py                    # submit all 3 eval jobs
-    python scripts/submit_eval_jobs.py --eval baseline    # just baseline eval
-    python scripts/submit_eval_jobs.py --eval mlp         # just MLP eval
-    python scripts/submit_eval_jobs.py --eval extended    # just extended sweep
+    python scripts/submit_eval_jobs.py                       # submit all eval jobs
+    python scripts/submit_eval_jobs.py --eval baseline       # just baseline eval
+    python scripts/submit_eval_jobs.py --eval mlp            # just MLP eval
+    python scripts/submit_eval_jobs.py --eval extended       # just extended sweep
+    python scripts/submit_eval_jobs.py --eval improvements   # wider FP + ChemBERTa + ensemble
 """
 
 import argparse
@@ -60,6 +61,15 @@ EVAL_CONFIGS = {
         ),
         "output_prefix": "eval_mlp",
     },
+    "improvements": {
+        "display_name": "vcpi-eval-improvements",
+        "script": (
+            "python scripts/qnu_model_improvements_sweep.py "
+            "--output-prefix eval_qnu_improvements"
+        ),
+        "output_prefix": "eval_qnu_improvements",
+        "extra_packages": "transformers sentencepiece",
+    },
 }
 
 
@@ -71,9 +81,11 @@ def submit_job(name: str, config: dict) -> None:
 
     # Bootstrap: clone repo → install deps → download data → run eval → upload results
     pip_pin_numpy = "pip install -q numpy==1.26.4"
+    extra = config.get("extra_packages", "")
     pip_install = (
         "pip install -q "
         "google-cloud-storage pyarrow pandas scikit-learn rdkit scipy"
+        + (f" {extra}" if extra else "")
     )
     pip_install_contest = (
         "pip install -q --ignore-requires-python "
@@ -137,8 +149,8 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp"],
-        default=["baseline", "extended", "mlp"],
+        choices=["baseline", "extended", "mlp", "improvements"],
+        default=["baseline", "extended", "mlp", "improvements"],
         help="Which eval jobs to submit (default: all)",
     )
     args = parser.parse_args()
