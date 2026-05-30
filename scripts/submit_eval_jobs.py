@@ -106,16 +106,18 @@ EVAL_CONFIGS = {
         "display_name": "vcpi-submit-ridge",
         "script": (
             "python scripts/generate_submission.py "
-            "--alpha 1000 --n-components 128 --reference-scope qnu --submit"
+            "--alpha 1000 --n-components 128 --reference-scope qnu"
         ),
         "output_prefix": "submission",
+        "upload_glob": "submission*.parquet",
     },
     "submit-ensemble": {
         "display_name": "vcpi-submit-ensemble",
         "script": (
-            "python scripts/generate_ensemble_submission.py --weighted --submit"
+            "python scripts/generate_ensemble_submission.py --weighted"
         ),
         "output_prefix": "submission_ensemble",
+        "upload_glob": "submission*.parquet",
     },
 }
 
@@ -139,10 +141,9 @@ def submit_job(name: str, config: dict) -> None:
         "git+https://github.com/virtualcell-vcpi/vcpi-prediction-contest-2026.git"
     )
 
-    # Upload results CSVs to GCS after eval
-    upload_results = (
-        f"gsutil -m cp {config['output_prefix']}*.csv {output_dir}/"
-    )
+    # Upload results to GCS after eval (CSVs for eval jobs, parquets for submission jobs)
+    upload_glob = config.get("upload_glob", f"{config['output_prefix']}*.csv")
+    upload_results = f"gsutil -m cp {upload_glob} {output_dir}/"
 
     bootstrap = " && ".join([
         f"git clone --branch {BRANCH} --single-branch {REPO_URL} /vcpi-eval",
