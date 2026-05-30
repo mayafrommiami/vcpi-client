@@ -60,6 +60,7 @@ def main():
     # Bootstrap: clone repo → install deps → run training script
     pip_install = (
         "pip install -q "
+        "'numpy<2' "  # numpy 2.x requires Python >=3.11; container is 3.10
         "git+https://github.com/virtualcell-vcpi/vcpi-client.git "
         "google-cloud-storage polars pyarrow rdkit scipy scikit-learn"
     )
