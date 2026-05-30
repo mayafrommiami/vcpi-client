@@ -94,6 +94,22 @@ EVAL_CONFIGS = {
         ),
         "output_prefix": "eval_qnu_concat_fp",
     },
+    "lasso": {
+        "display_name": "vcpi-eval-lasso-weighted",
+        "script": (
+            "python scripts/qnu_lasso_weighted_sweep.py "
+            "--output-prefix eval_qnu_lasso_weighted"
+        ),
+        "output_prefix": "eval_qnu_lasso_weighted",
+    },
+    "submit-ridge": {
+        "display_name": "vcpi-submit-ridge",
+        "script": (
+            "python scripts/generate_submission.py "
+            "--alpha 1000 --n-components 128 --reference-scope qnu --submit"
+        ),
+        "output_prefix": "submission",
+    },
 }
 
 
@@ -173,8 +189,8 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat"],
-        default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
+        default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
         help="Which eval jobs to submit (default: all)",
     )
     args = parser.parse_args()
