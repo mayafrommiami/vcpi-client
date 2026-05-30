@@ -58,9 +58,10 @@ def main():
     container  = CONTAINERS["cpu"] if args.gpu == "CPU" else CONTAINERS["gpu"]
 
     # Bootstrap: clone repo → install deps → run training script
+    # Pin numpy first — numpy 2.x requires Python >=3.11, container is 3.10
+    pip_pin_numpy = "pip install -q numpy==1.26.4"
     pip_install = (
         "pip install -q "
-        "'numpy<2' "  # numpy 2.x requires Python >=3.11; container is 3.10
         "git+https://github.com/virtualcell-vcpi/vcpi-client.git "
         "google-cloud-storage polars pyarrow rdkit scipy scikit-learn"
     )
@@ -75,6 +76,7 @@ def main():
     bootstrap = " && ".join([
         f"git clone --branch {BRANCH} --single-branch {REPO_URL} /vcpi-hack",
         "cd /vcpi-hack",
+        pip_pin_numpy,
         pip_install,
         pip_install_contest,
         f"python {train_script}",
