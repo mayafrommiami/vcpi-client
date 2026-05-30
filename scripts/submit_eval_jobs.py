@@ -110,6 +110,13 @@ EVAL_CONFIGS = {
         ),
         "output_prefix": "submission",
     },
+    "submit-ensemble": {
+        "display_name": "vcpi-submit-ensemble",
+        "script": (
+            "python scripts/generate_ensemble_submission.py --weighted --submit"
+        ),
+        "output_prefix": "submission_ensemble",
+    },
 }
 
 
