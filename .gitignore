@@ -1,0 +1,31 @@
+# Data — never commit
+*.parquet
+*.csv.gz
+*.h5
+*.h5ad
+data/
+
+# Credentials
+.env
+TVC_TOKEN
+*service_account*.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+
+# Analysis outputs (large)
+analysis/*.png
+analysis/batch_effect_genes.csv
+analysis/shared_anchors.csv
