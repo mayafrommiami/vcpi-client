@@ -4,9 +4,10 @@ Lasso/ElasticNet + weight-filtered PCA sweep.
 Two key ideas motivated by the contest info that every test compound
 has ≥5 differentially expressed genes (LFC≥0.5, padj≤0.05):
 
-  1. Lasso / ElasticNet instead of Ridge — L1 pushes predictions toward
-     zero for inactive genes, concentrating signal on the genes that are
-     actually differentially expressed (what wMSE rewards).
+  1. Lasso / ElasticNet in PCA score space — first reduce targets to N
+     principal components, then fit L1/ElasticNet on the score matrix
+     (N-dim, not 12,995-dim). Reconstruct with vt. This is fast because
+     coordinate descent runs on N outputs, not 12,995.
 
   2. Weight-filtered PCA — decompose only the top-N contest-weighted
      genes before fitting. The PCA components then represent directions
@@ -35,10 +36,12 @@ from sklearn.utils.extmath import randomized_svd
 
 
 # Hyperparameter grids
-LASSO_ALPHAS      = [0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0]
-ENET_ALPHAS       = [0.005, 0.01, 0.05, 0.1, 0.5]
+# Alphas for Lasso/ElasticNet in PCA score space (PC scores are on a much
+# larger scale than raw standardised features, so alpha must be larger)
+PCA_L1_COMPONENTS = [64, 128]          # PCA dims before fitting L1
+LASSO_ALPHAS      = [1.0, 10.0, 100.0, 500.0, 1000.0, 2000.0, 5000.0]
+ENET_ALPHAS       = [10.0, 100.0, 500.0, 1000.0, 2000.0]
 ENET_L1_RATIOS    = [0.5, 0.75, 0.9]
-RIDGE_ALPHAS_FINE = [500.0, 1000.0, 2000.0]   # focused on known-good region
 
 # Gene subset sizes for weight-filtered PCA
 TOP_GENE_COUNTS   = [500, 1000, 2000, 3000]
@@ -172,37 +175,51 @@ def _add_lasso_enet_and_weighted_pca(
         return out.astype(np.float32)
 
     n_genes = y_ref.shape[1]
-
-    # ── 1. Lasso on raw targets ───────────────────────────────────────────────
     y_centered = y_ref - y_mean
-    for alpha in LASSO_ALPHAS:
-        try:
-            model = Lasso(alpha=alpha, fit_intercept=False, max_iter=2000)
-            model.fit(x_ref_s, y_centered)
-            pred = np.clip(y_mean + model.predict(x_val_s), 0.0, None).astype(np.float32)
-            sweep.score_prediction(scores, meta,
-                name=f"{feature.name}__lasso_alpha{alpha:g}",
-                pred_arr=fill(pred), truth=truth, val_ids=val_ids, weights=weights,
-                row={"model_family": "lasso", "features": feature.name,
-                     "alpha": alpha, "ref_coverage": len(ref_cov), "val_coverage": len(val_cov)})
-        except Exception as e:
-            print(f"  Lasso alpha={alpha} failed: {e}", flush=True)
 
-    # ── 2. ElasticNet ─────────────────────────────────────────────────────────
-    for alpha in ENET_ALPHAS:
-        for l1 in ENET_L1_RATIOS:
+    # ── 1 & 2. Lasso / ElasticNet in PCA score space ─────────────────────────
+    # Key fix: reduce targets to N PCA components first (fast), then fit L1
+    # in that low-dim space. Fitting L1 on 12,995 raw targets runs coordinate
+    # descent per-gene and is infeasibly slow (~days). With PCA-first it's
+    # 64/128 outputs — same approach as Ridge, just with L1 penalty.
+    for n_comp in PCA_L1_COMPONENTS:
+        n_c = min(n_comp, y_centered.shape[0] - 1, y_centered.shape[1] - 1)
+        u, s, vt = randomized_svd(y_centered, n_components=n_c, n_iter=5, random_state=SEED)
+        pc_ref = (u * s[None, :]).astype(np.float32)   # (n_ref, n_c)
+        vt_f   = vt[:n_c].astype(np.float32)
+
+        print(f"  PCA{n_c} Lasso sweep...", flush=True)
+        for alpha in LASSO_ALPHAS:
             try:
-                model = ElasticNet(alpha=alpha, l1_ratio=l1, fit_intercept=False, max_iter=2000)
-                model.fit(x_ref_s, y_centered)
-                pred = np.clip(y_mean + model.predict(x_val_s), 0.0, None).astype(np.float32)
+                model = Lasso(alpha=alpha, fit_intercept=False, max_iter=2000)
+                model.fit(x_ref_s, pc_ref)
+                pred_pc = model.predict(x_val_s).astype(np.float32)
+                pred = np.clip(pred_pc @ vt_f + y_mean, 0.0, None).astype(np.float32)
                 sweep.score_prediction(scores, meta,
-                    name=f"{feature.name}__enet_alpha{alpha:g}_l1r{l1:g}",
+                    name=f"{feature.name}__pca{n_c}_lasso_alpha{alpha:g}",
                     pred_arr=fill(pred), truth=truth, val_ids=val_ids, weights=weights,
-                    row={"model_family": "elasticnet", "features": feature.name,
-                         "alpha": alpha, "l1_ratio": l1,
+                    row={"model_family": "pca_lasso", "features": feature.name,
+                         "n_components": n_c, "alpha": alpha,
                          "ref_coverage": len(ref_cov), "val_coverage": len(val_cov)})
             except Exception as e:
-                print(f"  ElasticNet alpha={alpha} l1={l1} failed: {e}", flush=True)
+                print(f"  PCA{n_c} Lasso alpha={alpha} failed: {e}", flush=True)
+
+        print(f"  PCA{n_c} ElasticNet sweep...", flush=True)
+        for alpha in ENET_ALPHAS:
+            for l1 in ENET_L1_RATIOS:
+                try:
+                    model = ElasticNet(alpha=alpha, l1_ratio=l1, fit_intercept=False, max_iter=2000)
+                    model.fit(x_ref_s, pc_ref)
+                    pred_pc = model.predict(x_val_s).astype(np.float32)
+                    pred = np.clip(pred_pc @ vt_f + y_mean, 0.0, None).astype(np.float32)
+                    sweep.score_prediction(scores, meta,
+                        name=f"{feature.name}__pca{n_c}_enet_alpha{alpha:g}_l1r{l1:g}",
+                        pred_arr=fill(pred), truth=truth, val_ids=val_ids, weights=weights,
+                        row={"model_family": "pca_elasticnet", "features": feature.name,
+                             "n_components": n_c, "alpha": alpha, "l1_ratio": l1,
+                             "ref_coverage": len(ref_cov), "val_coverage": len(val_cov)})
+                except Exception as e:
+                    print(f"  PCA{n_c} ElasticNet alpha={alpha} l1={l1} failed: {e}", flush=True)
 
     # ── 3. Weight-filtered PCA + Ridge ───────────────────────────────────────
     for top_n in TOP_GENE_COUNTS:
