@@ -102,6 +102,14 @@ EVAL_CONFIGS = {
         ),
         "output_prefix": "eval_qnu_lasso_weighted",
     },
+    "all-batches": {
+        "display_name": "vcpi-eval-all-batches-correction",
+        "script": (
+            "python scripts/qnu_all_batches_sweep.py "
+            "--output-prefix eval_all_batches"
+        ),
+        "output_prefix": "eval_all_batches",
+    },
     "submit-ridge": {
         "display_name": "vcpi-submit-ridge",
         "script": (
@@ -197,7 +205,7 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "submit-ridge", "submit-ensemble"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "submit-ridge", "submit-ensemble"],
         default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
         help="Which eval jobs to submit (default: all)",
     )
