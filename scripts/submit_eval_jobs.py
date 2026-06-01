@@ -110,6 +110,13 @@ EVAL_CONFIGS = {
         ),
         "output_prefix": "eval_all_batches",
     },
+    "no-edge": {
+        "display_name": "vcpi-eval-no-edge",
+        "script": (
+            "python scripts/qnu_no_edge_sweep.py"
+        ),
+        "output_prefix": "eval_no_edge_summary",
+    },
     "submit-ridge": {
         "display_name": "vcpi-submit-ridge",
         "script": (
@@ -205,7 +212,7 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "submit-ridge", "submit-ensemble"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "no-edge", "submit-ridge", "submit-ensemble"],
         default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
         help="Which eval jobs to submit (default: all)",
     )
