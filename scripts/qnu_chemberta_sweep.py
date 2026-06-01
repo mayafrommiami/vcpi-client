@@ -48,7 +48,10 @@ import qnu_plate_holdout_eval as qnu
 SEED      = 13
 N_COMP    = 128
 ALPHA     = 1000.0
-CHEMBERTA_MODEL = "DeepChem/ChemBERTa-77M-MTR"
+# seyonec/ChemBERTa-zinc-base-v1: pure HuggingFace RoBERTa, no DeepChem dep,
+# pre-trained on 10M ZINC SMILES. DeepChem/ChemBERTa-77M-MTR requires DeepChem
+# as a tokenizer dependency which is not installed in the Vertex AI container.
+CHEMBERTA_MODEL = "seyonec/ChemBERTa-zinc-base-v1"
 BATCH_SIZE = 64
 
 
