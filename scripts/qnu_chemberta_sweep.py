@@ -154,6 +154,8 @@ def build_rdkit_components(
     )
     desc_frame = chem[qnu.DESC_COLS].apply(pd.to_numeric, errors="coerce").fillna(0)
     morgan_gen = rdFingerprintGenerator.GetMorganGenerator(radius=2, fpSize=512)
+    ap_gen     = rdFingerprintGenerator.GetAtomPairGenerator(fpSize=1024)
+    tt_gen     = rdFingerprintGenerator.GetTopologicalTorsionGenerator(fpSize=256)
 
     maccs_d:    dict[str, np.ndarray] = {}
     morgan_d:   dict[str, np.ndarray] = {}
@@ -178,15 +180,13 @@ def build_rdkit_components(
         morgan_d[uid] = qnu.bitvect_to_array(morgan_gen.GetFingerprint(mol), 512)
 
         # Atom-pair 1024-bit
-        ap_fp    = rdMolDescriptors.GetHashedAtomPairFingerprintAsBitVect(mol, nBits=1024)
         ap_arr   = np.zeros(1024, dtype=np.float32)
-        DataStructs.ConvertToNumpyArray(ap_fp, ap_arr)
+        DataStructs.ConvertToNumpyArray(ap_gen.GetFingerprint(mol), ap_arr)
         ap_d[uid] = ap_arr
 
         # Topological torsion 256-bit
-        tt_fp   = rdMolDescriptors.GetHashedTopologicalTorsionFingerprintAsBitVect(mol, nBits=256)
         tt_arr  = np.zeros(256, dtype=np.float32)
-        DataStructs.ConvertToNumpyArray(tt_fp, tt_arr)
+        DataStructs.ConvertToNumpyArray(tt_gen.GetFingerprint(mol), tt_arr)
         torsion_d[uid] = tt_arr
 
         # 8 physicochemical descriptors
@@ -382,7 +382,10 @@ def main() -> None:
         all_ids_list,
         gene_filter,
     )
-    print(f"  Expression: {len(expr.columns)} compounds × {len(gene_filter)} genes", flush=True)
+    # Filter all_ids_list to only compounds present in the expression matrix
+    all_ids_list = [uid for uid in all_ids_list if uid in expr.columns]
+    print(f"  Expression: {len(expr.columns)} compounds × {len(gene_filter)} genes "
+          f"({len(all_ids_list)} with expression)", flush=True)
 
     # ── Build fingerprint components ─────────────────────────────────────────
     print("\nBuilding RDKit fingerprint components...", flush=True)
