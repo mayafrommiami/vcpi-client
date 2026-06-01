@@ -126,6 +126,16 @@ EVAL_CONFIGS = {
         "output_prefix": "eval_plate_correction",
         "upload_glob": "eval_plate_correction*.csv",
     },
+    "chemberta": {
+        "display_name": "vcpi-eval-chemberta",
+        "script": (
+            "python scripts/qnu_chemberta_sweep.py "
+            "--output-prefix eval_chemberta"
+        ),
+        "output_prefix": "eval_chemberta",
+        "upload_glob": "eval_chemberta*.csv",
+        "extra_packages": "transformers sentencepiece torch",
+    },
     "submit-ridge": {
         "display_name": "vcpi-submit-ridge",
         "script": (
@@ -221,7 +231,7 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "no-edge", "plate-correction", "submit-ridge", "submit-ensemble"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "no-edge", "plate-correction", "chemberta", "submit-ridge", "submit-ensemble"],
         default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
         help="Which eval jobs to submit (default: all)",
     )
