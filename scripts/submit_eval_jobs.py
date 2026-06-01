@@ -117,6 +117,15 @@ EVAL_CONFIGS = {
         ),
         "output_prefix": "eval_no_edge_summary",
     },
+    "plate-correction": {
+        "display_name": "vcpi-eval-plate-correction",
+        "script": (
+            "python scripts/qnu_plate_correction_sweep.py "
+            "--output-prefix eval_plate_correction"
+        ),
+        "output_prefix": "eval_plate_correction",
+        "upload_glob": "eval_plate_correction*.csv",
+    },
     "submit-ridge": {
         "display_name": "vcpi-submit-ridge",
         "script": (
@@ -212,7 +221,7 @@ def main():
     parser.add_argument(
         "--eval",
         nargs="*",
-        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "no-edge", "submit-ridge", "submit-ensemble"],
+        choices=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso", "all-batches", "no-edge", "plate-correction", "submit-ridge", "submit-ensemble"],
         default=["baseline", "extended", "mlp", "improvements", "finetuned", "radius3", "concat", "lasso"],
         help="Which eval jobs to submit (default: all)",
     )
