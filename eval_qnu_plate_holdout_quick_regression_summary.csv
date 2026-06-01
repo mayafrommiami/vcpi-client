@@ -1,0 +1,11 @@
+model,n_plates,n_compounds,wmse_mean
+rdkit_morgan512+descriptors_target_pca64_ridge_alpha1000,3,540,0.48179978132247925
+rdkit_tanimoto_knn_k50,3,540,0.482198029756546
+rdkit_tanimoto_knn_k100,3,540,0.4828842282295227
+rdkit_morgan512+descriptors_target_pca64_pls16,3,540,0.4837256669998169
+rdkit_tanimoto_knn_k20,3,540,0.4857308864593506
+qnu_active_mean_without_plate,3,540,0.4888137876987457
+rdkit_tanimoto_knn_k5,3,540,0.5062403082847595
+all_active_mean_without_plate,3,540,0.5064641237258911
+bhr_active_mean_without_plate,3,540,0.567207932472229
+kdl_active_mean_without_plate,3,540,0.6541911959648132

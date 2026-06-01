@@ -1,0 +1,4 @@
+features,dimension,reference_universe_covered,reference_universe_total,selected_validation_covered,selected_validation_total
+descriptors,8,14026,14026,540,540
+rdkit_morgan512,512,14026,14026,540,540
+rdkit_morgan512+descriptors,520,14026,14026,540,540

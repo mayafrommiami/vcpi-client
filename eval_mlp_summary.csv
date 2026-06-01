@@ -1,0 +1,5 @@
+model,n_plates,n_compounds,wmse_mean
+mlp_ridge_ensemble,3,540,0.47890737652778625
+ridge_pca128_alpha1000,3,540,0.48154783248901367
+morgan_fp2048_mlp_30ep,3,540,0.48223379254341125
+all_active_mean,3,540,0.5064641237258911
